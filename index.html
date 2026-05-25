@@ -376,29 +376,37 @@
             hideResult();
             hideStatus();
             
-            const formData = new FormData();
-            formData.append('image', selectedImage);
-            formData.append('tone', document.getElementById('image-tone').value);
-            
-            try {
-                const response = await fetch('http://localhost:5000/api/generate-from-image', {
-                    method: 'POST',
-                    body: formData
-                });
+            // 将图片转为base64
+            const reader = new FileReader();
+            reader.onload = async (e) => {
+                const base64Image = e.target.result.split(',')[1]; // 去掉data:image/...前缀
                 
-                const data = await response.json();
-                
-                if (response.ok) {
-                    showResult(data.description, data.copywriting);
-                    showStatus('文案生成成功！', 'success');
-                } else {
-                    throw new Error(data.error || '生成失败');
+                try {
+                    const response = await fetch('/api/generate', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({
+                            type: 'image',
+                            data: base64Image,
+                            tone: document.getElementById('image-tone').value
+                        })
+                    });
+                    
+                    const data = await response.json();
+                    
+                    if (response.ok && data.success) {
+                        showResult(data.description, data.copywriting);
+                        showStatus('文案生成成功！', 'success');
+                    } else {
+                        throw new Error(data.error || data.details || '生成失败');
+                    }
+                } catch (error) {
+                    showStatus(`连接失败: ${error.message}`, 'error');
+                } finally {
+                    stopLoading();
                 }
-            } catch (error) {
-                showStatus(`连接失败: ${error.message}`, 'error');
-            } finally {
-                stopLoading();
-            }
+            };
+            reader.readAsDataURL(selectedImage);
         }
         
         // 文字模式：生成文案
@@ -417,15 +425,19 @@
             hideStatus();
             
             try {
-                const response = await fetch('http://localhost:5000/api/generate-text', {
+                const response = await fetch('/api/generate', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ product: productName, features: features, tone: tone })
+                    body: JSON.stringify({
+                        type: 'text',
+                        data: { product: productName, features: features },
+                        tone: tone
+                    })
                 });
                 
                 const data = await response.json();
                 
-                if (response.ok) {
+                if (response.ok && data.success) {
                     showResult(null, data.copywriting);
                     showStatus('文案生成成功！', 'success');
                 } else {
